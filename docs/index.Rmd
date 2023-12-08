@@ -1,0 +1,421 @@
+---
+title: "StackOverflow Survey"
+author: "Benard Omido"
+date: "2023-12-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+```
+
+# 2023 Stack Overflow Developer Survey Analysis
+
+### Overview
+
+Stack Overflow is a question and answer website for programmers, whose sole purpose is to empower the world develop technology through collective knowledge. The annual developer survey contains a wide range of information; from basic information such as age and education level to how developers learn, level up, and the tools they use.
+
+Load the libraries
+
+```{r}
+library(tidyverse)
+library(ggrepel)
+```
+
+Import the dataset
+```{r}
+survey <- read_csv("F:\\Tutorials\\R tutorials\\R MARKDOWN\\surveyResults.csv")
+survey
+```
+
+```{r}
+View(survey)
+glimpse(survey)
+```
+
+
+### **Data Cleaning and Preparation Tasks**
+
+1. Select columns to be used in the analysis
+2. Check for duplicates and null values
+3. Recode values in columns in Education Level column
+4. Fix the YearsCodePro column and convert it to numeric form
+
+
+**1. Create new dataframe**
+
+```{r}
+survey_new <- survey %>% 
+  select(-c(Q120, TechList, BuyNewTool, DatabaseWantToWorkWith, WebframeWantToWorkWith, MiscTechHaveWorkedWith, MiscTechWantToWorkWith, ToolsTechHaveWorkedWith, ToolsTechWantToWorkWith, NEWCollabToolsHaveWorkedWith, NEWCollabToolsWantToWorkWith, `OpSysPersonal use`, contains("OfficeStack"), contains("AIDev"), AISearchWantToWorkWith, SOAI, contains("AINext"), TBranch, contains("Knowledge"), contains("Frequency"), TimeAnswering, TimeSearching, SurveyLength, SurveyEase))
+
+View(survey_new)
+```
+
+
+**2. Check for null values and duplicates in the data set**
+
+```{r, results='hide'}
+# Check for duplicates
+survey_new %>% 
+  summarize(dups = sum(duplicated(.)))
+
+#Use skimr to check null values
+skimr::skim(survey_new)
+```
+There were no duplicates in this data set, and majority of the columns contain null values
+
+
+**3. Fix the Education level column**
+
+```{r}
+survey_new %>% 
+  count(EdLevel)
+```
+
+```{r}
+survey_new <- survey_new %>% 
+  mutate(EdLevel = fct_recode(EdLevel, 
+                              "Associate degree" = "Associate degree (A.A., A.S., etc.)",
+                              "Bachelor’s degree" = "Bachelor’s degree (B.A., B.S., B.Eng., etc.)",
+                              "Master’s degree" = "Master’s degree (M.A., M.S., M.Eng., MBA, etc.)",
+                              "Professional degree" = "Professional degree (JD, MD, Ph.D, Ed.D, etc.)",
+                              "Secondary school" = "Secondary school (e.g. American high school, German Realschule or Gymnasium, etc.)",
+                              "Some college / University" = "Some college/university study without earning a degree"))
+  
+```
+
+
+**4. Fix the YearsCodePro column, convert it to numeric**
+
+```{r}
+unique(survey_new$YearsCodePro)
+
+#There are two strings in this column: "Less than 1 year" and "More than 50 years", I replaced them with 1 and 51 respectively
+
+survey_new <- survey_new %>% 
+  mutate(
+    across(YearsCodePro,
+           .fns = ~as.numeric(str_replace_all(YearsCodePro, c("Less than 1 year" = "1", "More then 50 years" = "51"))))
+  )
+  
+```
+
+
+### **Data Analysis / EDA**
+
+**1. What is the age distribution of developers?**
+
+```{r}
+age_distrn <- survey_new %>% 
+  group_by(Age) %>% 
+  summarize(n = n())
+
+ggplot(age_distrn, aes(fct_rev(fct_reorder(Age, n)), n)) +
+  geom_col(aes(fill = fct_reorder(Age, n))) +
+   geom_text(aes(label = n), vjust = -0.05, position = position_stack(vjust = 0.5)) +
+  labs(
+    title = "Age Distribution of developers",
+    subtitle = "(Most developers are aged between 25 - 34 years)",
+    x = "Age Group", 
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text = element_text(angle = 90),
+        plot.subtitle = element_text(size = 10, face = "bold"),
+        plot.title = element_text(size = 14, face = "bold"),
+        axis.title = element_text(size = 12, face = "bold")) +
+  scale_fill_brewer(palette = "Paired")
+  
+```
+
+**Insights**
+
+More than 33,000 developers are aged between 25 - 34 years, which are the majority, and only 1171 are aged above 65 years. 
+
+
+**2. What are the top 10 countries with the most developers?**
+
+```{r}
+library(colourpicker)
+library(RColorBrewer)
+
+#First recode countries with long names to abbreviated forms, then use slice_max() to obtain the top 10 countries with most developers
+
+Top_Countries <- survey_new %>% 
+  mutate(Country = fct_recode(Country, "UK" = "United Kingdom of Great Britain and Northern Ireland",
+                              "US" = "United States of America")) %>% 
+  group_by(Country) %>%
+  summarize(top10 = n()) %>% 
+  arrange(desc(top10)) %>% 
+  slice_max(top10, n = 10)
+
+#Plot a bar plot showing the distribution of developers
+
+Top_Countries %>% 
+  ggplot(aes(fct_rev(fct_reorder(Country, top10)), top10)) +
+  geom_col(aes(fill = fct_reorder(Country, top10))) +
+  geom_text(aes(label = top10), vjust = -0.1, position = position_stack(vjust = 0.5)) +
+  labs(
+    title = "Distribution of Developers Across the World",
+    subtitle = "(United States of America has the most Developers in the world)",
+    x = "Country",
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90),
+        plot.title = element_text(size = 14, face = "bold"),
+        plot.subtitle = element_text(size = 10, face = "bold", colour = ("#333333")),
+        axis.title = element_text(size = 12, face = "bold"),
+        legend.position = "none") +
+  scale_fill_brewer(palette = "Paired")
+
+```
+**Insights**
+
+United States of America has the largest number of developers, followed by Germany. Notably, US has double the number of developers compared to Germany.
+
+
+**3. What are the most used programming languages among developers? (Top 10)**
+
+```{r}
+library(knitr)
+library(kableExtra)
+
+#Use separate_rows() to get the correct number of languages each developer has used
+
+Most_used <- survey_new %>% 
+  separate_rows(LanguageHaveWorkedWith, sep = ";") %>% 
+  group_by(LanguageHaveWorkedWith) %>% 
+  summarize(Language_count = n()) %>% 
+  arrange(desc(Language_count)) %>% 
+  slice_max(Language_count, n = 10) 
+
+#Plot a table for the top 10 most used languages
+
+Most_used %>% 
+  kable(digits = 0, format = "html", caption = "Javascript is the most Widely used Language among Developers") %>% 
+  kable_classic("striped", "bordered", full_width = FALSE, html_font = "cambria",
+                position = "left",
+                fixed_thead = T) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = "black", background = ("#F0E68C")) %>% 
+  column_spec(2, color = "black", background = "lightblue")
+
+```
+
+
+**4. What is the most popular method of learning to code?**
+
+```{r}
+#Use separate_rows() to separate the different learning methods, then recode the long labels in Learn code column to enable easy plotting 
+
+method_code <- survey_new %>% 
+  filter(!is.na(LearnCode)) %>% 
+  separate_rows(LearnCode, sep = ";") %>% 
+  group_by(LearnCode) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  mutate(LearnCode = fct_recode(LearnCode, 
+                                "Other online resources\n(e.g., videos, blogs, forum)" = "Other online resources (e.g., videos, blogs, forum)",
+                                "School\n(i.e., University, College, etc)" = "School (i.e., University, College, etc)",
+                                "Hackathons\n(virtual or in-person)" = "Hackathons (virtual or in-person)"),
+         percent = round(n / sum(n), 2)) %>%
+  arrange(desc(percent))
+
+method_code
+  
+#Use a bar plot to visualize the results
+ggplot(method_code, aes(fct_reorder(LearnCode, percent), percent)) +
+  geom_col(aes(fill = LearnCode)) +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent) +
+  geom_text(aes(label = percent), vjust = 0.5, position = position_stack(vjust = 0.5)) + 
+  labs(
+    title = "Most Popular methods of Learning to Code",
+    subtitle = "(Other online resouces, e.g videos and blogs are the most popular method)",
+    x = "Method of Learning",
+    y = "Percent"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.title = element_text(size = 14, face = "bold"),
+        axis.title = element_text(size = 12, face = "bold"),
+        plot.subtitle = element_text(size = 10, face = "bold")) +
+  scale_fill_brewer(palette = "Paired")
+
+```
+
+**Insights**
+
+24% of the developers learned to code through "Other online resources (e.g, videos, blogs, and forum), Thus it was the most popular method of learning. 
+
+
+**5. Is there a significant difference between salaries earned by data scientists and data analysts?**
+
+```{r}
+#First calculate the average and median salary across all DevType groups
+
+survey_new %>% 
+  group_by(DevType) %>%
+  summarize(avg_sal = mean(ConvertedCompYearly, na.rm = TRUE),
+            median_sal = median(ConvertedCompYearly, na.rm = TRUE)) %>% 
+  arrange(desc(avg_sal)) %>% 
+  view()
+
+#Use a density plot to check if data for Data scientist and Data/Business analyst follows a normal distribution
+
+survey_new %>% 
+  filter(DevType %in% c("Data scientist or machine learning specialist", "Data or business analyst")) %>%
+  ggplot(aes(ConvertedCompYearly)) +
+  geom_density() +
+  facet_wrap(~DevType)
+
+#Since the data is not normally distributed, perform a mann whitney u test to check if there is a significant difference in salaries 
+
+#Null Hypothesis : The rank sums of salary of data scientists and data analysts do not differ significantly
+#Alternative Hypothesis : The rank sums of salary of data scientists and data analysts do differ significantly
+#p-value = 0.05
+
+survey_new %>%
+  filter(DevType %in% c("Data scientist or machine learning specialist", "Data or business analyst")) %>%
+  wilcox.test(ConvertedCompYearly ~ DevType, data = ., 
+              alternative = "two.sided", paired = FALSE)
+
+```
+From above test, the p-value is less than 0.05, thus we reject the null hypothesis and conclude that there is a statistically significant difference in the Yearly Compensation of the two groups.
+
+
+**6. At what companies do developers get paid the most**
+
+```{r}
+#Filter out null values
+#I focused on the top 5 most paying companies and used median to compare the Yearly compensation across the companies
+#Used median because the data contains a few large and very small Yearly compensations, which may skew the results if mean is used
+
+paid_most<- survey_new %>% 
+  filter(!is.na(PlatformHaveWorkedWith) & !is.na(ConvertedCompYearly) & ConvertedCompYearly > 1000 & ConvertedCompYearly < 1000000) %>% 
+  select(PlatformHaveWorkedWith, ConvertedCompYearly) %>% 
+  separate_rows(PlatformHaveWorkedWith, sep = ";") %>% 
+  group_by(PlatformHaveWorkedWith) %>%
+  mutate(median_pay = median(ConvertedCompYearly)) %>% 
+  filter(median_pay >= 83000)
+
+View(paid_most)
+
+#Plot a boxplot to visualize the salary distribution
+
+ggplot(paid_most, aes(fct_reorder(PlatformHaveWorkedWith, ConvertedCompYearly), ConvertedCompYearly)) +
+  geom_boxplot(aes(fill = PlatformHaveWorkedWith)) +
+  coord_flip() +
+  labs(
+    title = "Distribution of Yearly Compensation of Developers\n Under Different Companies",
+    x = "Company",
+    y = "Yearly Compensation"
+  ) + 
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 12, face = "bold")
+  )
+
+```
+
+**Insights**
+
+Colocation has the highest median Yearly compensation of approximately 105,000. It is the highest paying company, followed closely by Fly.io and Amazon Web Services.
+
+
+**7.Are you more likely to get a job as a developer if you have a masters degree?**
+
+```{r}
+#First select only developers with a masters degree, then create 3 new levels of employment status: Employed, Unemployed, and Other
+
+Employement_masters <- survey_new %>% 
+  filter(EdLevel == "Master’s degree" & !is.na(Employment)) %>% 
+  separate_rows(Employment, sep = ";") %>% 
+  mutate(Employment = fct_collapse(Employment, 
+                                   Employed = c("Employed, full-time", "Employed, part-time"),
+                                   UnemployedORFreelancers = c("I prefer not to say", "Independent contractor, freelancer, or self-employed", "Not employed, but looking for work"),
+                                   Other = c("Not employed, and not looking for work", "Retired", "Student, full-time", "Student, part-time"))) %>% 
+  group_by(Employment) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  mutate(prop = round(n / sum(n), 2))
+
+View(Employement_masters)
+
+#Plot a table using kable Extra package
+
+Employement_masters %>% 
+    kable(digits = 2, format = "html", caption = "Likelihood of getting a job\n if you have a masters degree") %>% 
+  kable_classic("striped", "bordered", full_width = FALSE, html_font = "cambria",
+                position = "left",
+                fixed_thead = T) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = "black", background = ("#F0E68C")) %>% 
+  column_spec(2, color = "black", background = "lightblue")
+
+```
+
+**Insights**
+
+76% of developers who have a master's degree are employed either full time or part time, thus, their is a higher chance of securing a job as a developer if you have a masters degree.
+
+**8. How does coding experience affect the level of pay?**
+
+```{r}
+survey_new %>% 
+  filter(!is.na(YearsCodePro) & !is.na(ConvertedCompYearly) & ConvertedCompYearly <= 1000000) %>% 
+  ggplot(aes(YearsCodePro, ConvertedCompYearly)) +
+  geom_point(position = "jitter", aes(color = Age)) +
+  geom_smooth(se = FALSE) +
+  scale_y_log10() +
+  labs(
+    title = "Relationship between Coding Experience and Yearly\n Compensation for Developers",
+    x = "Years Professionaly Coded",
+    y = "Yearly Compensation"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 12, face = "bold")
+  )
+```
+
+**Insights**
+
+Looking at the above figure, there appears to be a non linear relationship between Yearly compensation of developers and work experience. 
+
+
+### **Conclusion**
+
+1. Based on our dataset, majority of the developers (33,247) are aged between 25 - 34 years, and as expected, developers aged above 65 years were the least. Out of the 89,184 developers who participated in the survey
+18,647 of them were from the United States of America, Germany came second, followed closely by India and the United Kingdom.
+
+2. Javascript is the most widely used programming language among developers, HTML/CSS closely follows. Intrestingly, Python has gained more popularity than SQL over the past year, compared to the 2022 Developer Survey.
+
+3. 24% of the developers indicated that they use Other online resources (e.g, videos, blogs, and forums) to learn to code, making it the most popular method. School, i.e, Universities/colleges, Books/Physical media, and Online courses / Certifications had 15 % popularity consecutively among developers as their go to method for learning how to code.
+
+4. The Mann Whitney u test indicated that there is a statistically significant difference between the Yearly Compensation given to data scientists and data/business analysts.
+
+5. The survey also indicated that Cocolation, Fly.io, Amazon Web Services, Linode, and Cloudfare were the best paying companies to developers. With Cocolation having the highest median annual pay.
+
+
+**Data Source Link**
+
+The dataset used in this analysis was obtained from Kaggle.com and can be found here:
+[id]: https://www.kaggle.com/datasets/stackoverflow/stack-overflow-2023-developers-survey
+
+
+
+
+
+
+
+
+
+
+
+
